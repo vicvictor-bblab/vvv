@@ -83,6 +83,7 @@ def save_plots_to_pdf(figlist, name, ja_name, comment):
     pdf_output = BytesIO()
     c = canvas.Canvas(pdf_output, pagesize=letter)
     width, height = letter
+    
 
     for i in range(0, len(figlist), 2):
         # ページ共通：タイトルとロゴ
@@ -142,8 +143,8 @@ def save_plots_to_pdf(figlist, name, ja_name, comment):
 
         else:
             # 最後のページで、奇数番目のグラフが描画された場合 → コメントを一緒に表示
-            wrapped_comment = "\n".join([comment[i:i+48] for i in range(0, len(comment), 48)])
             icon_path = "aoki.jpg"
+            wrapped_comment = "\n".join([comment[i:i+48] for i in range(0, len(comment), 48)])
             icon_width = 25
             icon_height = 25
             c.drawImage(icon_path, 50, 300, width=icon_width, height=icon_height, mask='auto')
@@ -160,6 +161,7 @@ def save_plots_to_pdf(figlist, name, ja_name, comment):
 
     # 最後のページにコメントがまだ出てない場合（figlistが偶数の場合）
     if len(figlist) % 2 == 0:
+        icon_path = "aoki.jpg"
         wrapped_comment = "\n".join([comment[i:i+48] for i in range(0, len(comment), 48)])
         c.setFont("IPAexGothic", 12)
         icon_width = 25
