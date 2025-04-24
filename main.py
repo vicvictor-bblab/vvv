@@ -17,7 +17,9 @@ from io import BytesIO
 from PIL import Image, ImageDraw
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
+
 # 日本語フォントを登録（パスは適宜変更してください）
+
 pdfmetrics.registerFont(TTFont("IPAexGothic", "ipaexg.ttf"))
 
 
@@ -349,7 +351,7 @@ with tab3:
     st.header("テストデータ入力")
     
     with st.form("test_data_form"):
-        test_name = st.text_input("名前(ja)を選択")
+        test_name = st.selectbox("名前を選択", [''] + list(id_list['名前'].unique()), index=0)
         test_date = st.date_input("日付を入力")
         test_pos = st.selectbox('ポジションを選択', ['P', 'C', 'IF', 'OF'])
         test_item = st.selectbox("Test Itemを選択", rawdata_original['Test Item'].unique())
