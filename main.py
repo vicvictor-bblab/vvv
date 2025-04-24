@@ -15,6 +15,11 @@ from reportlab.lib.utils import ImageReader
 import tempfile
 from io import BytesIO
 from PIL import Image, ImageDraw
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
+# 日本語フォントを登録（パスは適宜変更してください）
+pdfmetrics.registerFont(TTFont("IPAexGothic", "ipaexg.ttf"))
+
 
 import requests
 from bs4 import BeautifulSoup
@@ -74,78 +79,60 @@ def get_first_image_url(name):
     else:
         return "画像が見つかりませんでした。"
     
-# グラフをPDFに保存する関数
-def save_plots_to_pdf(figlist, name, ja_name):
+def save_plots_to_pdf(figlist, name, ja_name, comment):
     pdf_output = BytesIO()
     c = canvas.Canvas(pdf_output, pagesize=letter)
     width, height = letter
 
     for i in range(0, len(figlist), 2):
-        # ヘッダー（タイトル）
+        # ページ共通：タイトルとロゴ
         c.setFont("Helvetica-Bold", 30)
         c.drawCentredString(width / 2, height - 70, name)
-
-        # ヘッダー（ロゴ画像）
         logo_path = "TsukubaLogo.png"
         logo = ImageReader(logo_path)
-        logo_width = 50
-        logo_height = 50
-        c.drawImage(logo, 40, height - logo_height - 35, width=logo_width, height=logo_height, mask='auto')
-    
+        c.drawImage(logo, 40, height - 85, width=50, height=50, mask='auto')
+
+        # 上部画像（顔写真）
         url = get_first_image_url(ja_name)
         response = requests.get(url, stream=True)
         if response.status_code == 200:
             img = Image.open(BytesIO(response.content)).convert("RGBA")
             width2, height2 = img.size
             size = min(width2, height2)
-
-            # 中心を基準にした円形マスク
             left = (width2 - size) // 2
             top = (height2 - size) // 2
-            right = left + size
-            bottom = top + size
-
             mask = Image.new("L", (size, size), 0)
             draw = ImageDraw.Draw(mask)
             draw.ellipse((0, 0, size, size), fill=255)
-
-            cropped_img = img.crop((left, top, right, bottom))
+            cropped_img = img.crop((left, top, left + size, top + size))
             cropped_img.putalpha(mask)
-
-            # 一時ファイルに保存
             with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmpfile:
                 cropped_img.save(tmpfile.name, format="PNG")
-                top_img_path = tmpfile.name
+                top_img_width, top_img_height = get_image_dimensions(tmpfile.name)
+                ratio = 50 / top_img_width
+                c.drawImage(tmpfile.name, 500, height - 85, width=top_img_width * ratio, height=top_img_height * ratio, mask='auto')
 
-                # PDFの右上に画像を配置
-                top_img_width, top_img_height = get_image_dimensions(top_img_path)
-                ratio = 50 / top_img_width  # 50pxにリサイズ
-                new_width = top_img_width * ratio
-                new_height = top_img_height * ratio
-                c.drawImage(top_img_path, 500, height - 85, width=new_width, height=new_height, mask='auto')
-            
-            
         # 最初のグラフ
-        img_stream_1 = get_fig_as_image(figlist[i])
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmpfile_1:
-            tmpfile_1.write(img_stream_1.getvalue())
-            tmpfile_1.close()
+        if i < len(figlist):
+            img_stream_1 = get_fig_as_image(figlist[i])
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmpfile_1:
+                tmpfile_1.write(img_stream_1.getvalue())
+                tmpfile_1.close()
+                img_width, img_height = get_image_dimensions(tmpfile_1.name)
+                ratio = (width * 0.8) / img_width
+                new_width = width * 0.8
+                new_height = img_height * ratio
+                x = (width - new_width) / 2
+                y1 = height // 2.3
+                c.drawImage(tmpfile_1.name, x, y1, width=new_width, height=new_height)
 
-            # サイズ調整
-            img_width, img_height = get_image_dimensions(tmpfile_1.name)
-            ratio = (width * 0.8) / img_width
-            new_width = width * 0.8
-            new_height = img_height * ratio
-            x = (width - new_width) / 2
-            c.drawImage(tmpfile_1.name, x, height // 2.3, width=new_width, height=new_height)
-
-        # 2番目のグラフ
+        # 2番目のグラフ or コメント
         if i + 1 < len(figlist):
+            # まだ次のグラフがある
             img_stream_2 = get_fig_as_image(figlist[i + 1])
             with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmpfile_2:
                 tmpfile_2.write(img_stream_2.getvalue())
                 tmpfile_2.close()
-
                 img_width, img_height = get_image_dimensions(tmpfile_2.name)
                 ratio = (width * 0.8) / img_width
                 new_width = width * 0.8
@@ -153,12 +140,45 @@ def save_plots_to_pdf(figlist, name, ja_name):
                 x = (width - new_width) / 2
                 c.drawImage(tmpfile_2.name, x, 30, width=new_width, height=new_height)
 
+        else:
+            # 最後のページで、奇数番目のグラフが描画された場合 → コメントを一緒に表示
+            wrapped_comment = "\n".join([comment[i:i+48] for i in range(0, len(comment), 48)])
+            icon_path = "aoki.jpg"
+            icon_width = 25
+            icon_height = 25
+            c.drawImage(icon_path, 50, 300, width=icon_width, height=icon_height, mask='auto')
+            c.setFont("IPAexGothic", 12)
+            c.drawString(70, 300, "  コメント")
+            text = c.beginText(50, 270)
+            text.setFont("IPAexGothic", 10)
+            text.setLeading(14)
+            for line in wrapped_comment.splitlines():
+                text.textLine(line)
+            c.drawText(text)
+
+        c.showPage()
+
+    # 最後のページにコメントがまだ出てない場合（figlistが偶数の場合）
+    if len(figlist) % 2 == 0:
+        wrapped_comment = "\n".join([comment[i:i+48] for i in range(0, len(comment), 48)])
+        c.setFont("IPAexGothic", 12)
+        icon_width = 25
+        icon_height = 25
+        c.drawImage(icon_path, 50, height - 70, width=icon_width, height=icon_height, mask='auto')
+        c.drawString(70, height - 70, "  コメント")
+        text = c.beginText(50, height - 100)
+        text.setFont("IPAexGothic", 10)
+        text.setLeading(14)
+        for line in wrapped_comment.splitlines():
+            text.textLine(line)
+        c.drawText(text)
         c.showPage()
 
     c.save()
     pdf_output.seek(0)
     return pdf_output
-    
+
+
 
         
 # タブを作成
@@ -262,11 +282,15 @@ with tab1:
     
     
         
-    # 出力先パスを入力するフィールド
+    comment = st.text_area('📝コメント', height=200)
+    
+    
+    
+
     
     if st.button("PDFを出力"):
         # PDFをメモリ上で生成
-        pdf_data = save_plots_to_pdf(figlist, selected_eng_name, selected_name)
+        pdf_data = save_plots_to_pdf(figlist, selected_eng_name, selected_name, comment)
         st.success("PDFが生成されました")
         output_path = st.text_input("保存先のファイル名を入力してください", "output_plots.pdf")
 
