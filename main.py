@@ -17,6 +17,9 @@ from io import BytesIO
 from PIL import Image, ImageDraw
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
+from plotnine import *
+from scipy.stats import norm
+import plotly.graph_objects as go
 
 # 日本語フォントを登録（パスは適宜変更してください）
 
@@ -183,6 +186,15 @@ def save_plots_to_pdf(figlist, name, ja_name, comment):
     return pdf_output
 
 
+# スコアグラフを追加する関数
+
+def add_score(df):
+    result = df.groupby('Test Item')['Result'].agg(['mean', 'std']).reset_index()
+    merged_df = pd.merge(df, result, on='Test Item', how='left')
+    merged_df['Z'] = (merged_df['Result'] - merged_df['mean']) / merged_df['std']
+    merged_df['score'] = norm.sf(merged_df['Z'])
+    return merged_df
+
 
         
 # タブを作成
@@ -220,13 +232,13 @@ with tab1:
 
     # フィルタリング
     filtered = rawdata[
-        (rawdata['名前'] == selected_name) &
-        (rawdata['Test Item'] == selected_test)
+        (rawdata['名前'] == selected_name)
     ]
     
     
     
     def plot_trendline(rawdata, selected_name, n, additional_test):
+        # データをフィルタリング
         filtered = rawdata[
             (rawdata['名前'] == selected_name) &
             (rawdata['Test Item'] == additional_test)
@@ -236,37 +248,56 @@ with tab1:
             st.warning(f"該当データがありません ({n})")
         else:
             filtered = filtered.sort_values(by='date')
+
+            # X（日付）とy（結果）を準備
             X = pd.to_datetime(filtered['date']).map(pd.Timestamp.toordinal)
             X = sm.add_constant(X)
             y = filtered['Result']
 
+            # 回帰分析（トレンドライン）
             model = sm.OLS(y, X)
             results = model.fit()
             filtered['trendline'] = results.predict(X)
 
+            # Plotlyでプロット
             fig = px.line(
                 filtered, x='date', y='Result', markers=True,
                 title=additional_test,
-                labels={"date": "date", "Result": "Result"}
+                labels={"date": "Date", "Result/Score": "Result"}
             )
+
+            # トレンドラインを追加
             fig.add_scatter(
                 x=filtered['date'], y=filtered['trendline'],
-                mode='lines', name='',
+                mode='lines', name='Trendline',
                 line=dict(color='orange', dash='dot')
             )
 
+            # 各ポイントの上にスコアを表示（既存のscore列を使用）
+            for i in range(len(filtered)):
+                fig.add_trace(go.Scatter(
+                    x=[filtered['date'].iloc[i]],
+                    y=[filtered['Result'].iloc[i]],  # スコアを表示する位置
+                    mode='text',
+                    text=[f"{100*filtered['score'].iloc[i]:.0f}"],  # スコアをパーセンテージ形式で表示
+                    textposition='top center',  # テキストの位置
+                    showlegend=False
+                ))
+
+            # Streamlitでプロット
             st.plotly_chart(fig, use_container_width=True, key=f"chart_{n}")
-            return fig  # 追加：生成したfigを返す
+            return fig  # 生成したfigを返す
 
-
-
+    
+    merged = add_score(filtered)
+    
 
 
     if filtered.empty:
         st.warning("該当データがありません")
     else:
         # 最初のグラフ（メインのテスト種目）
-        fig = plot_trendline(rawdata, selected_name, 0, selected_test)
+        fig = plot_trendline(merged, selected_name, 0, selected_test)
         figlist = [fig]  
         
      # 追加グラフ描画ループ
@@ -275,7 +306,7 @@ with tab1:
             f"追加テスト種目 {i+1}", test_items,
             key=f"additional_test_{i}"
         )
-        fig = plot_trendline(rawdata, selected_name, i+1, selected)
+        fig = plot_trendline(merged, selected_name, i+1, selected)
         figlist.append(fig)  
         
 
