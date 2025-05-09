@@ -19,6 +19,7 @@ from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from scipy.stats import norm
 import plotly.graph_objects as go
+import matplotlib.pyplot as plt
 
 # 日本語フォントを登録（パスは適宜変更してください）
 
@@ -195,6 +196,29 @@ def add_score(df):
     return merged_df
 
 
+def df_score(df, name):
+    merged_df = add_score(df)
+    filtered_df = merged_df[merged_df['名前'] == name]
+    scores = filtered_df.groupby('Test Item').mean('Result').reset_index()
+    scores['scores'] = round(100*scores['score'], 0)
+    return scores
+
+def score_bar(fil_df, name):
+    scores = df_score(fil_df, name)
+    fig = plt.figure(figsize=(15, 6))
+    bars = plt.bar(scores['Test Item'], scores['scores'])  
+    plt.xticks(rotation=90) 
+    plt.tight_layout() 
+    plt.ylim(0, 100)  
+    plt.ylabel('Score')
+    for i, bar in enumerate(bars):
+        height = bar.get_height()
+        result = scores['Result'].iloc[i]
+        plt.text(bar.get_x() + bar.get_width() / 2, height,
+                f'{result:.2f}', ha='center', va='bottom', fontsize=9)   
+    st.pyplot(fig)
+    return fig
+    
         
 # タブを作成
 tab1, tab4, tab2, tab3 = st.tabs(["グラフ", "ランキング", "ID入力", "テストデータ入力"])
@@ -288,7 +312,7 @@ with tab1:
             return fig  # 生成したfigを返す
 
     
-    merged = add_score(filtered)
+    merged = add_score(rawdata)
     
 
 
@@ -313,6 +337,10 @@ with tab1:
     if st.button("グラフを追加"):
         st.session_state.additional_count += 1
         st.rerun()
+        
+    # スコア棒グラフ
+    score_bar = score_bar(rawdata, selected_name)
+    figlist.append(score_bar)
     
     
         
