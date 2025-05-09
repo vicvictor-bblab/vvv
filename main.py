@@ -17,7 +17,6 @@ from io import BytesIO
 from PIL import Image, ImageDraw
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
-from plotnine import *
 from scipy.stats import norm
 import plotly.graph_objects as go
 
