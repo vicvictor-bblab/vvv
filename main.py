@@ -198,7 +198,7 @@ def add_score(df):
 
         
 # タブを作成
-tab1, tab2, tab3 = st.tabs(["グラフ", "ID入力", "テストデータ入力"])
+tab1, tab4, tab2, tab3 = st.tabs(["グラフ", "ランキング", "ID入力", "テストデータ入力"])
 
 with tab1:
     # セッションステートの初期化
@@ -340,6 +340,7 @@ with tab1:
 
 
 
+ 
         
 
 with tab2:
@@ -444,6 +445,23 @@ with tab3:
             
       
         
+with tab4:
+    if st.button("データ更新"):
+        conn = sqlite3.connect('physical_rawdata.db')
+        rawdata_original = pd.read_sql_query("SELECT * FROM physical_rawdata", conn)
+        conn.close()
+        st.success("データが更新されました")
         
+    rawdata_original['date'] = pd.to_datetime(rawdata_original['date'])  # 例: 2025/04/13 形式
+
+    id_list_unique = id_list.drop_duplicates(subset=['ID'])  # ID列で重複を削除
+    rawdata = rawdata_original.merge(id_list_unique[['ID', '名前']], on='ID', how='left')
+    merged = add_score(rawdata)
+    
+    merged['Score'] = round(merged['score']*100, 0)
+    rank = merged[['名前', 'Test Item', 'date', 'Result', 'Score']].sort_values(by='Score', ascending=False)
+    st.write(rank)
+
+     
 
         
