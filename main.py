@@ -1,33 +1,34 @@
-import pandas as pd
-import streamlit as st
-import plotly.express as px
-import statsmodels.api as sm
+import os
 import sqlite3
+import tempfile
 from io import BytesIO
+
+import matplotlib.pyplot as plt
+import pandas as pd
+import plotly.express as px
+import plotly.graph_objects as go
 import plotly.io as pio
-from streamlit.runtime.scriptrunner import RerunException
-from reportlab.lib.pagesizes import letter
-from reportlab.pdfgen import canvas
-import tempfile
-from reportlab.lib.pagesizes import landscape, letter
-from reportlab.pdfgen import canvas
-from reportlab.lib.utils import ImageReader
-import tempfile
-from io import BytesIO
+import statsmodels.api as sm
+import streamlit as st
 from PIL import Image, ImageDraw
+from bs4 import BeautifulSoup
+from reportlab.lib.pagesizes import landscape, letter
+from reportlab.lib.utils import ImageReader
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
+from reportlab.pdfgen import canvas
 from scipy.stats import norm
-import plotly.graph_objects as go
-import matplotlib.pyplot as plt
+from streamlit.runtime.scriptrunner import RerunException
+import requests
 
 # 日本語フォントを登録（パスは適宜変更してください）
 
 pdfmetrics.registerFont(TTFont("IPAexGothic", "ipaexg.ttf"))
 
 
-import requests
-from bs4 import BeautifulSoup
+
+# Directory on a network share where database files are stored
+DB_DIR = os.getenv("SHARED_DB_DIR", "/mnt/shared")
 
 st.set_page_config(
         page_title="My Streamlit App",
@@ -36,11 +37,11 @@ st.set_page_config(
     )
 
 
-conn = sqlite3.connect('id_database.db')
+conn = sqlite3.connect(os.path.join(DB_DIR, 'id_database.db'))
 id_list = pd.read_sql_query("SELECT * FROM id_table", conn)
 conn.close()
 
-conn = sqlite3.connect('physical_rawdata.db')
+conn = sqlite3.connect(os.path.join(DB_DIR, 'physical_rawdata.db'))
 rawdata_original = pd.read_sql_query("SELECT * FROM physical_rawdata", conn)
 conn.close()
 
@@ -229,7 +230,7 @@ with tab1:
         st.session_state.additional_count = 0
         
     if st.button("データを更新"):
-        conn = sqlite3.connect('physical_rawdata.db')
+        conn = sqlite3.connect(os.path.join(DB_DIR, 'physical_rawdata.db'))
         rawdata_original = pd.read_sql_query("SELECT * FROM physical_rawdata", conn)
         conn.close()
         st.success("データが更新されました")
@@ -382,7 +383,7 @@ with tab2:
         new_id = st.text_input("新しいIDを入力")
         submitted = st.form_submit_button("追加")
         if submitted:
-            conn = sqlite3.connect('id_database.db')
+            conn = sqlite3.connect(os.path.join(DB_DIR, 'id_database.db'))
             cursor = conn.cursor()
             cursor.execute("INSERT INTO id_table (名前, Name, ID) VALUES (?, ?, ?)", (new_name, new_eng_name, new_id))
             conn.commit()
@@ -390,19 +391,19 @@ with tab2:
             st.success("新しいIDが追加されました")
             
         st.write("最新のIDリストを再表示:")
-        id_list = pd.read_sql_query("SELECT * FROM id_table", sqlite3.connect('id_database.db'))
+        id_list = pd.read_sql_query("SELECT * FROM id_table", sqlite3.connect(os.path.join(DB_DIR, 'id_database.db')))
         st.write(id_list)
     # 一番下の行を削除するボタンをフォーム外に移動
     st.write("一番下の行を削除するには以下のボタンを押してください:")
     if st.button("一番下の行を削除"):
-        conn = sqlite3.connect('id_database.db')
+        conn = sqlite3.connect(os.path.join(DB_DIR, 'id_database.db'))
         cursor = conn.cursor()
         cursor.execute("DELETE FROM id_table WHERE rowid = (SELECT MAX(rowid) FROM id_table)")
         conn.commit()
         conn.close()
         st.success("一番下の行が削除されました")
         # 最新のIDリストを再表示
-        id_list = pd.read_sql_query("SELECT * FROM id_table", sqlite3.connect('id_database.db'))
+        id_list = pd.read_sql_query("SELECT * FROM id_table", sqlite3.connect(os.path.join(DB_DIR, 'id_database.db')))
         st.write(id_list)
         
 
@@ -437,7 +438,7 @@ with tab3:
                 
             
                 
-            conn = sqlite3.connect('physical_rawdata.db')
+            conn = sqlite3.connect(os.path.join(DB_DIR, 'physical_rawdata.db'))
             cursor = conn.cursor()
             cursor.execute("""
             INSERT INTO physical_rawdata (Name_1, date, ID, Name_2, Position, [Test Item], Result)
@@ -449,7 +450,7 @@ with tab3:
             
             
             
-            conn = sqlite3.connect('physical_rawdata.db')
+            conn = sqlite3.connect(os.path.join(DB_DIR, 'physical_rawdata.db'))
             rawdata_original = pd.read_sql_query("SELECT * FROM physical_rawdata", conn)
             conn.close()
             
@@ -458,14 +459,14 @@ with tab3:
         
     st.write("一番下の行を削除するには以下のボタンを押してください:")
     if st.button("一番下の行を削除 (テストデータ)"):
-        conn = sqlite3.connect('physical_rawdata.db')
+        conn = sqlite3.connect(os.path.join(DB_DIR, 'physical_rawdata.db'))
         cursor = conn.cursor()
         cursor.execute("DELETE FROM physical_rawdata WHERE rowid = (SELECT MAX(rowid) FROM physical_rawdata)")
         conn.commit()
         conn.close()
         st.success("一番下の行が削除されました")
         # 最新のテストデータを再表示
-        conn = sqlite3.connect('physical_rawdata.db')
+        conn = sqlite3.connect(os.path.join(DB_DIR, 'physical_rawdata.db'))
         rawdata_original = pd.read_sql_query("SELECT * FROM physical_rawdata", conn)
         conn.close()
         st.write(rawdata_original)
@@ -474,7 +475,7 @@ with tab3:
         
 with tab4:
     if st.button("データ更新"):
-        conn = sqlite3.connect('physical_rawdata.db')
+        conn = sqlite3.connect(os.path.join(DB_DIR, 'physical_rawdata.db'))
         rawdata_original = pd.read_sql_query("SELECT * FROM physical_rawdata", conn)
         conn.close()
         st.success("データが更新されました")
